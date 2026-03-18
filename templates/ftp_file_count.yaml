@@ -1,0 +1,39 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 02fd390587474c1385f9f5e54397873f
+      name: Template/Apps
+  templates:
+    - uuid: 3047d25d58e3413abe5d6d699e9d2d2a
+      template: 'FTP File Count'
+      name: 'FTP File Count'
+      description: 'Check the file count in FTP directory. Compares to previous count.'
+      groups:
+        - name: Template/Apps
+      items:
+        - uuid: aa2321aef3034e0e911bd398d8eb0f95
+          name: 'FTP File Count'
+          type: EXTERNAL
+          key: 'ftpcheck.py[{$FTP_HOST},{$FTP_USER},{$FTP_PASSWORD}]'
+          delay: 8h
+          history: 30d
+          description: 'Check file count in remote FTP directory.'
+          triggers:
+            - uuid: 924ed655645945f9b9673ed2fd171e2b
+              expression: 'change(/FTP File Count/ftpcheck.py[{$FTP_HOST},{$FTP_USER},{$FTP_PASSWORD}])=0'
+              name: 'File Count Change'
+              priority: INFO
+              manual_close: 'YES'
+      macros:
+        - macro: '{$FTP_HOST}'
+        - macro: '{$FTP_PASSWORD}'
+        - macro: '{$FTP_USER}'
+  graphs:
+    - uuid: 7f7f63580b47446ca848b90a416a8b06
+      name: 'FTP File Count'
+      graph_items:
+        - color: BA68C8
+          calc_fnc: ALL
+          item:
+            host: 'FTP File Count'
+            key: 'ftpcheck.py[{$FTP_HOST},{$FTP_USER},{$FTP_PASSWORD}]'

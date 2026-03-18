@@ -1,0 +1,182 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 94f18f0d64214b94b1db37f433a7c07d
+      name: Templates/Applications
+  templates:
+    - uuid: 32d8ef399e5f4790a6b1a84bfda18455
+      template: 'Template Podcast Feed Monitor'
+      name: 'Template Podcast Feed Monitor'
+      description: |
+        Monitors WordPress podcast feed for weekday (Mon-Fri) publishing schedule.
+        
+        Triggers:
+        - Missed weekday publication
+        - Less than 2 weeks (10 posts) scheduled
+        - API health issues
+      groups:
+        - name: Templates/Applications
+      items:
+        - uuid: 45f5234477cb4743ac8765c9f42e4f6d
+          name: 'Podcast API: Health Status'
+          type: TRAP
+          key: podcast.api_healthy
+          delay: '0'
+          history: 90d
+          description: 'Whether the WordPress podcast API is responding (1=healthy, 0=unhealthy)'
+          tags:
+            - tag: component
+              value: api
+          triggers:
+            - uuid: f0802f5ab8534e2ea3a77987d5f903a3
+              expression: 'last(/Template Podcast Feed Monitor/podcast.api_healthy)=0'
+              name: 'Podcast API is not responding'
+              priority: HIGH
+              description: 'The WordPress podcast API is not responding to requests'
+        - uuid: 6737a0cb18cb4d9dbe572c6998316ea0
+          name: 'Podcast: Has 2 Weeks Scheduled'
+          type: TRAP
+          key: podcast.has_two_weeks_scheduled
+          delay: '0'
+          history: 90d
+          description: 'Whether at least 10 weekday posts are scheduled (1=yes, 0=no)'
+          tags:
+            - tag: component
+              value: schedule
+          triggers:
+            - uuid: 9bf709187fa84227ac32eea8801c4fa1
+              expression: 'last(/Template Podcast Feed Monitor/podcast.has_two_weeks_scheduled)=0'
+              name: 'Podcast: Less than 2 weeks of episodes scheduled'
+              priority: WARNING
+              description: 'There are fewer than 10 weekday posts scheduled. Need to queue more episodes.'
+        - uuid: 5f701bc27584479ea3d45023767d717f
+          name: 'Podcast: Last Published Date'
+          type: TRAP
+          key: podcast.last_published_date
+          delay: '0'
+          history: 90d
+          trends: '0'
+          value_type: TEXT
+          description: 'Date of the most recently published episode (YYYY-MM-DD)'
+          tags:
+            - tag: component
+              value: publish
+        - uuid: cbc71125c9874c08b79ab0265434d879
+          name: 'Podcast: Last Published Timestamp'
+          type: TRAP
+          key: podcast.last_published_timestamp
+          delay: '0'
+          history: 90d
+          units: unixtime
+          description: 'Unix timestamp of last published episode'
+          tags:
+            - tag: component
+              value: publish
+        - uuid: 1b43bb140a634e7a856a50bddb4971ad
+          name: 'Podcast: Last Published Title'
+          type: TRAP
+          key: podcast.last_published_title
+          delay: '0'
+          history: 90d
+          trends: '0'
+          value_type: TEXT
+          description: 'Title of the most recently published episode'
+          tags:
+            - tag: component
+              value: publish
+        - uuid: bbfaa61264084ba5bc0979b4dc960765
+          name: 'Podcast: Last Scheduled Date (Furthest Out)'
+          type: TRAP
+          key: podcast.last_scheduled_date
+          delay: '0'
+          history: 90d
+          trends: '0'
+          value_type: TEXT
+          description: 'Date of the furthest-out scheduled episode (YYYY-MM-DD)'
+          tags:
+            - tag: component
+              value: schedule
+        - uuid: f7456b2f0cfe4350a57af8c840702601
+          name: 'Podcast: Last Scheduled Timestamp (Furthest Out)'
+          type: TRAP
+          key: podcast.last_scheduled_timestamp
+          delay: '0'
+          history: 90d
+          units: unixtime
+          description: 'Unix timestamp of furthest-out scheduled episode'
+          tags:
+            - tag: component
+              value: schedule
+        - uuid: 5259f2d454244f738572dcc085ec34db
+          name: 'Podcast: Last Scheduled Title (Furthest Out)'
+          type: TRAP
+          key: podcast.last_scheduled_title
+          delay: '0'
+          history: 90d
+          trends: '0'
+          value_type: TEXT
+          description: 'Title of the furthest-out scheduled episode'
+          tags:
+            - tag: component
+              value: schedule
+        - uuid: c22d30399c01454babf4ddf487eb2003
+          name: 'Podcast: Missed Weekday Publications'
+          type: TRAP
+          key: podcast.missed_weekday_posts
+          delay: '0'
+          history: 90d
+          description: 'Number of weekday posts that should have been published but were not. 0 = all good.'
+          tags:
+            - tag: component
+              value: publish
+          triggers:
+            - uuid: 09e75ea02c914549a17848f7041419d5
+              expression: 'last(/Template Podcast Feed Monitor/podcast.missed_weekday_posts)>0'
+              name: 'Podcast: Missed weekday publication ({ITEM.LASTVALUE} posts)'
+              priority: HIGH
+              description: 'One or more weekday podcast episodes failed to publish on schedule'
+        - uuid: 3a7bab34048d4817bf1e6c68aa054258
+          name: 'Podcast: Next Scheduled Date'
+          type: TRAP
+          key: podcast.next_scheduled_date
+          delay: '0'
+          history: 90d
+          trends: '0'
+          value_type: TEXT
+          description: 'Date of the next scheduled episode (YYYY-MM-DD)'
+          tags:
+            - tag: component
+              value: schedule
+        - uuid: b809166233ab432181aecb42b1114791
+          name: 'Podcast: Next Scheduled Timestamp'
+          type: TRAP
+          key: podcast.next_scheduled_timestamp
+          delay: '0'
+          history: 90d
+          units: unixtime
+          description: 'Unix timestamp of next scheduled episode'
+          tags:
+            - tag: component
+              value: schedule
+        - uuid: 3d00e78d0e834b36826ee6a45ff79fd5
+          name: 'Podcast: Next Scheduled Title'
+          type: TRAP
+          key: podcast.next_scheduled_title
+          delay: '0'
+          history: 90d
+          trends: '0'
+          value_type: TEXT
+          description: 'Title of the next scheduled episode'
+          tags:
+            - tag: component
+              value: schedule
+        - uuid: df0ac91bbff54bb1a3c0d9b0726568f7
+          name: 'Podcast: Scheduled Weekday Episodes'
+          type: TRAP
+          key: podcast.scheduled_weekday_count
+          delay: '0'
+          history: 90d
+          description: 'Total number of weekday episodes scheduled for future publication'
+          tags:
+            - tag: component
+              value: schedule
