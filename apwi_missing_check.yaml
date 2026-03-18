@@ -1,0 +1,165 @@
+zabbix_export:
+  version: "7.0"
+  template_groups:
+    - uuid: 956b8875bcf94f9e991dbbb279696822
+      name: Template/Apps
+  templates:
+    - uuid: a2fe09c030d84dbc99a56aeb57fa80bf
+      template: APWI Files Monitor
+      name: APWI Files Monitor
+      description: |
+        Monitors APWI files for consecutive weekdays
+        Reports the latest date that has all previous weekday files present
+        Warns if latest consecutive date is less than 4 weeks ahead
+      groups:
+        - name: Templates
+      tags:
+        - tag: Application
+          value: Audio Files
+      macros:
+        - macro: "{$FILE_PATH}"
+          value: "/path/to/files"
+          description: "Path to the directory containing APWI audio files"
+      valuemaps: []
+      discovery_rules:
+        - uuid: 4151c33650224d8592047ad5fd86eeb2
+          name: Audio Files Discovery
+          type: ZABBIX_ACTIVE
+          key: 'vfs.file.regexp[{$FILE_PATH},^apwi([0-9]{6})\.mp3$,"{#FILENAME}\t{#DATE}"]'
+          delay: 12h
+          filter:
+            evaltype: AND
+            conditions: []
+          item_prototypes:
+            - uuid: 8a9f4046cd39429a8eacc706bc7cf397
+              name: "File presence {#DATE}"
+              key: "vfs.file.exists[{$FILE_PATH}/apwi{#DATE}.mp3]"
+              type: ZABBIX_ACTIVE
+              value_type: FLOAT
+              trends: "0"
+              description: ""
+              tags: []
+              preprocessing: []
+
+            - uuid: 89ab1e530f464a7b99bdc0512a6df286
+              name: "File date {#DATE}"
+              key: "date.weekday[{#DATE}]"
+              type: CALCULATED
+              value_type: FLOAT
+              trends: "0"
+              description: ""
+              params: |
+                $year = '20' . substr('{#DATE}', 0, 2);
+                $month = substr('{#DATE}', 2, 2);
+                $day = substr('{#DATE}', 4, 2);
+                return date('w', strtotime($year . '-' . $month . '-' . $day));
+              tags: []
+              preprocessing: []
+
+          trigger_prototypes: []
+          graph_prototypes: []
+          preprocessing: []
+
+      items:
+        - uuid: b2929f818f9e4a1886d5298aa3f50123
+          name: File Data Collector
+          key: file.data.collector
+          type: CALCULATED
+          value_type: TEXT
+          trends: "0"
+          description: "Collects data about all discovered files"
+          params: |
+            count(/APWI Files Monitor/vfs.file.exists[*], "like", "1")
+
+        - uuid: a1929f818f9e4a1886d5298aa3f50122
+          name: Last consecutive date
+          key: last.consecutive.date
+          type: CALCULATED
+          value_type: CHAR
+          trends: "0"
+          description: "Finds the latest date with all previous weekday files present"
+          params: |
+            // Get all available dates from discovered items
+            var dates = [];
+            var items = find_items(/APWI Files Monitor/vfs.file.exists[*]);
+
+            // First, collect all dates that have files
+            items.forEach(function(item) {
+                if (item.lastvalue === "1") {
+                    var match = item.key_.match(/apwi(\d{6})/);
+                    if (match) {
+                        dates.push(match[1]);
+                    }
+                }
+            });
+
+            if (dates.length === 0) return "";
+
+            // Sort dates in descending order
+            dates.sort().reverse();
+
+            // Check each date for continuity
+            for (var i = 0; i < dates.length; i++) {
+                var currentDate = dates[i];
+                var year = "20" + currentDate.substring(0, 2);
+                var month = currentDate.substring(2, 4);
+                var day = currentDate.substring(4, 6);
+                
+                var checkDate = new Date(year, parseInt(month) - 1, parseInt(day));
+                var isConsecutive = true;
+                var checkedDays = 0;
+                var maxCheck = 20; // Check up to 20 weekdays back
+                
+                while (checkedDays < maxCheck) {
+                    checkDate.setDate(checkDate.getDate() - 1);
+                    
+                    // Skip weekends
+                    if (checkDate.getDay() === 0 || checkDate.getDay() === 6) {
+                        continue;
+                    }
+                    
+                    checkedDays++;
+                    
+                    // Format the date to match our pattern
+                    var checkDateStr = 
+                        checkDate.getFullYear().toString().substring(2) +
+                        (checkDate.getMonth() + 1).toString().padStart(2, "0") +
+                        checkDate.getDate().toString().padStart(2, "0");
+                    
+                    // If we're missing a weekday file, this date isn't consecutive
+                    if (!dates.includes(checkDateStr)) {
+                        isConsecutive = false;
+                        break;
+                    }
+                }
+                
+                if (isConsecutive) {
+                    return currentDate;
+                }
+            }
+
+            return "";
+          tags: []
+          triggers:
+            - uuid: 58b89e6d890e42308daea8567638d869
+              expression: "{APWI Files Monitor:last.consecutive.date.strlen()}<1"
+              name: No consecutive files found
+              priority: HIGH
+              description: ""
+              manual_close: "YES"
+
+            - uuid: 96331e8d4f20492b8b4ea8a6755b04a6
+              expression: "{APWI Files Monitor:last.consecutive.date.strlen()}>0"
+              name: Last consecutive file date
+              priority: INFO
+              description: Last consecutive date is {ITEM.LASTVALUE}
+              manual_close: "YES"
+
+            - uuid: 6b2549a0c74b4cd1b318c315b0143d95
+              expression: |
+                {APWI Files Monitor:latest.consecutive.date.strlen()}>0 and
+                (date_sub(now(), {APWI Files Monitor:latest.consecutive.date.last()}, "s") < -2419200)
+              name: Last consecutive file less than 4 weeks ahead
+              description: The latest consecutive file date is less than 4 weeks in the future
+              priority: WARNING
+              manual_close: "YES"
