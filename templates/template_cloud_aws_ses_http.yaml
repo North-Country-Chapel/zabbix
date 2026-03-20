@@ -1,0 +1,469 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 26da355aa0844cd19f7b0daff76363e3
+      name: Templates/Cloud
+  templates:
+    - uuid: 80f7bf3aa2584a4da5faacab3c456c60
+      template: 'AWS SES by HTTP'
+      name: 'AWS SES by HTTP'
+      description: |
+        Monitors AWS SES account-level sending metrics via CloudWatch.
+        Requires IAM permissions: cloudwatch:GetMetricData, cloudwatch:DescribeAlarms.
+        Set macros: {$AWS.ACCESS.KEY.ID}, {$AWS.SECRET.ACCESS.KEY}, {$AWS.REGION}.
+      groups:
+        - name: Templates/Cloud
+      macros:
+        - macro: '{$AWS.ACCESS.KEY.ID}'
+          description: 'IAM access key ID.'
+        - macro: '{$AWS.SECRET.ACCESS.KEY}'
+          type: SECRET_TEXT
+          description: 'IAM secret access key.'
+        - macro: '{$AWS.REGION}'
+          value: 'us-east-1'
+          description: 'AWS region for SES (e.g. us-east-1).'
+        - macro: '{$AWS.SES.CHECK.INTERVAL}'
+          value: '30m'
+          description: 'How often to poll CloudWatch for SES metrics.'
+        - macro: '{$AWS.DATA.TIMEOUT}'
+          value: '60'
+          description: 'Timeout for CloudWatch API calls.'
+        - macro: '{$AWS.SES.BOUNCE.RATE.WARN}'
+          value: '0.02'
+          description: 'Bounce rate warning threshold (2%).'
+        - macro: '{$AWS.SES.BOUNCE.RATE.HIGH}'
+          value: '0.05'
+          description: 'Bounce rate critical threshold (5%).'
+        - macro: '{$AWS.SES.COMPLAINT.RATE.WARN}'
+          value: '0.0008'
+          description: 'Complaint rate warning threshold (0.08%).'
+        - macro: '{$AWS.SES.COMPLAINT.RATE.HIGH}'
+          value: '0.001'
+          description: 'Complaint rate critical threshold (0.1%).'
+      items:
+        - uuid: 8e8f10a85da24b4b8a3726f842190d79
+          name: 'AWS SES: Get metrics'
+          type: SCRIPT
+          key: aws.ses.get_metrics
+          delay: '{$AWS.SES.CHECK.INTERVAL}'
+          history: '0'
+          trends: '0'
+          value_type: TEXT
+          timeout: '{$AWS.DATA.TIMEOUT}'
+          description: 'Fetches SES CloudWatch metrics. Returns JSON keyed by metric ID.'
+          parameters:
+            - name: AccessKeyId
+              value: '{$AWS.ACCESS.KEY.ID}'
+            - name: SecretAccessKey
+              value: '{$AWS.SECRET.ACCESS.KEY}'
+            - name: region
+              value: '{$AWS.REGION}'
+          params: |
+            var params         = JSON.parse(value),
+                accessKeyId     = params.AccessKeyId,
+                secretAccessKey = params.SecretAccessKey,
+                region          = params.region,
+                service         = 'monitoring',
+                host            = 'monitoring.' + region + '.amazonaws.com';
+
+            // ── Pure-JS SHA-256 (Duktape-compatible) ─────────────────────────────────────
+            function sha256(ascii) {
+                function rightRotate(value, amount) {
+                    return (value >>> amount) | (value << (32 - amount));
+                }
+                var mathPow = Math.pow, maxWord = mathPow(2, 32),
+                    i, j, result = '', words = [],
+                    asciiBitLength = ascii.length * 8,
+                    hash = [], k = [], primeCounter = 0, isComposite = {};
+                for (var candidate = 2; primeCounter < 64; candidate++) {
+                    if (!isComposite[candidate]) {
+                        for (i = 0; i < 313; i += candidate) { isComposite[i] = candidate; }
+                        hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+                        k[primeCounter++]  = (mathPow(candidate, 1/3) * maxWord) | 0;
+                    }
+                }
+                ascii += '\x80';
+                while (ascii.length % 64 !== 56) { ascii += '\x00'; }
+                for (i = 0; i < ascii.length; i++) {
+                    j = ascii.charCodeAt(i);
+                    if (j >> 8) { return ''; }
+                    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+                }
+                words[words.length] = ((asciiBitLength / maxWord) | 0);
+                words[words.length] = (asciiBitLength | 0);
+                for (j = 0; j < words.length;) {
+                    var w = words.slice(j, j += 16), oldHash = hash.slice(0),
+                        a, b, c, d, e, f, g, h;
+                    a=hash[0]; b=hash[1]; c=hash[2]; d=hash[3];
+                    e=hash[4]; f=hash[5]; g=hash[6]; h=hash[7];
+                    for (i = 0; i < 64; i++) {
+                        if (i >= 16) {
+                            var w15 = w[i-15], w2 = w[i-2];
+                            w[i] = ((rightRotate(w15,7) ^ rightRotate(w15,18) ^ (w15>>>3))
+                                   + (w[i-7]|0)
+                                   + (rightRotate(w2,17) ^ rightRotate(w2,19) ^ (w2>>>10))
+                                   + (w[i-16]|0)) | 0;
+                        }
+                        var temp1 = (h
+                            + (rightRotate(e,6) ^ rightRotate(e,11) ^ rightRotate(e,25))
+                            + ((e & f) ^ (~e & g)) + k[i] + (w[i]|0)) | 0,
+                            temp2 = ((rightRotate(a,2) ^ rightRotate(a,13) ^ rightRotate(a,22))
+                            + ((a&b)^(a&c)^(b&c))) | 0;
+                        h=g; g=f; f=e; e=(d+temp1)|0;
+                        d=c; c=b; b=a; a=(temp1+temp2)|0;
+                    }
+                    hash[0]=(oldHash[0]+a)|0; hash[1]=(oldHash[1]+b)|0;
+                    hash[2]=(oldHash[2]+c)|0; hash[3]=(oldHash[3]+d)|0;
+                    hash[4]=(oldHash[4]+e)|0; hash[5]=(oldHash[5]+f)|0;
+                    hash[6]=(oldHash[6]+g)|0; hash[7]=(oldHash[7]+h)|0;
+                }
+                for (i = 0; i < 8; i++) {
+                    for (j = 3; j >= 0; j--) {
+                        result += ((hash[i] >> (j*8)) & 255).toString(16).replace(/^([\da-f])$/, '0$1');
+                    }
+                }
+                return result;
+            }
+
+            // ── Pure-JS HMAC-SHA256 ───────────────────────────────────────────────────────
+            function hmacSha256(key, data) {
+                var blockSize = 64;
+                function strToBytes(s) {
+                    var b = [];
+                    for (var i = 0; i < s.length; i++) { b.push(s.charCodeAt(i) & 0xff); }
+                    return b;
+                }
+                function bytesToStr(b) {
+                    var s = '';
+                    for (var i = 0; i < b.length; i++) { s += String.fromCharCode(b[i]); }
+                    return s;
+                }
+                function hexToBytes(h) {
+                    var b = [];
+                    for (var i = 0; i < h.length; i += 2) { b.push(parseInt(h.substr(i,2), 16)); }
+                    return b;
+                }
+                var keyBytes = (typeof key === 'string' && key.length === 64 && /^[0-9a-f]+$/.test(key))
+                              ? hexToBytes(key) : strToBytes(key);
+                if (keyBytes.length > blockSize) { keyBytes = hexToBytes(sha256(bytesToStr(keyBytes))); }
+                while (keyBytes.length < blockSize) { keyBytes.push(0); }
+                var opad = [], ipad = [];
+                for (var i = 0; i < blockSize; i++) {
+                    opad.push(keyBytes[i] ^ 0x5c);
+                    ipad.push(keyBytes[i] ^ 0x36);
+                }
+                var inner = sha256(bytesToStr(ipad) + data);
+                return sha256(bytesToStr(opad) + bytesToStr(hexToBytes(inner)));
+            }
+
+            // ── Build request ─────────────────────────────────────────────────────────────
+            var now       = new Date(),
+                amzdate   = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z',
+                date      = amzdate.slice(0, 8),
+                endTime   = now.toISOString().slice(0, 19) + 'Z',
+                startTime = new Date(now - 5 * 60 * 1000).toISOString().slice(0, 19) + 'Z';
+
+            var metricDefs = [
+                { id: 'm_send',           metric: 'Send',             stat: 'Sum'     },
+                { id: 'm_bounce',         metric: 'Bounce',           stat: 'Sum'     },
+                { id: 'm_complaint',      metric: 'Complaint',        stat: 'Sum'     },
+                { id: 'm_reject',         metric: 'Reject',           stat: 'Sum'     },
+                { id: 'm_delivery',       metric: 'DeliveryAttempts', stat: 'Sum'     },
+                { id: 'm_bounce_rate',    metric: 'BounceRate',       stat: 'Average' },
+                { id: 'm_complaint_rate', metric: 'ComplaintRate',    stat: 'Average' }
+            ];
+
+            var qsParts = [];
+            qsParts.push('Action=GetMetricData');
+            qsParts.push('EndTime=' + encodeURIComponent(endTime));
+
+            metricDefs.forEach(function(m, i) {
+                var idx = i + 1, pfx = 'MetricDataQueries.member.' + idx;
+                qsParts.push(pfx + '.Id=' + m.id);
+                qsParts.push(pfx + '.MetricStat.Metric.MetricName=' + m.metric);
+                qsParts.push(pfx + '.MetricStat.Metric.Namespace=AWS%2FSES');
+                qsParts.push(pfx + '.MetricStat.Period=300');
+                qsParts.push(pfx + '.MetricStat.Stat=' + m.stat);
+            });
+
+            qsParts.push('ScanBy=TimestampDescending');
+            qsParts.push('StartTime=' + encodeURIComponent(startTime));
+            qsParts.push('Version=2010-08-01');
+            var qs = qsParts.sort().join('&');
+
+            var bodyHash     = sha256(qs),
+                canonicalReq = 'POST\n/\n'
+                             + '\ncontent-type:application/x-www-form-urlencoded'
+                             + '\nhost:' + host + '\nx-amz-date:' + amzdate
+                             + '\n\ncontent-type;host;x-amz-date\n' + bodyHash,
+                credScope    = date + '/' + region + '/' + service + '/aws4_request',
+                strToSign    = 'AWS4-HMAC-SHA256\n' + amzdate + '\n' + credScope + '\n' + sha256(canonicalReq),
+                k1  = hmacSha256('AWS4' + secretAccessKey, date),
+                k2  = hmacSha256(k1, region),
+                k3  = hmacSha256(k2, service),
+                k4  = hmacSha256(k3, 'aws4_request'),
+                sig = hmacSha256(k4, strToSign),
+                auth = 'AWS4-HMAC-SHA256 Credential=' + accessKeyId + '/' + credScope
+                     + ', SignedHeaders=content-type;host;x-amz-date, Signature=' + sig;
+
+            var req = new HttpRequest();
+            req.addHeader('Host: '           + host);
+            req.addHeader('x-amz-date: '    + amzdate);
+            req.addHeader('Content-Type: application/x-www-form-urlencoded');
+            req.addHeader('Authorization: ' + auth);
+            req.addHeader('Accept: application/json');
+
+            var response = req.post('https://' + host + '/', qs),
+                status   = req.getStatus();
+
+            if (status !== 200) {
+                return JSON.stringify({ error: 'HTTP ' + status + ': ' + response });
+            }
+
+            try {
+                var data    = JSON.parse(response),
+                    members = data.GetMetricDataResponse
+                                && data.GetMetricDataResponse.GetMetricDataResult
+                                && data.GetMetricDataResponse.GetMetricDataResult.MetricDataResults;
+
+                if (!members) {
+                    return JSON.stringify({ error: 'Unexpected response: ' + response });
+                }
+                if (!Array.isArray(members)) { members = [members]; }
+
+                var out = {};
+                members.forEach(function(m) {
+                    var vals = m.Values;
+                    if (!vals) { return; }
+                    if (!Array.isArray(vals)) { vals = [vals]; }
+                    out[m.Id] = parseFloat(vals[0]) || 0;
+                });
+                return JSON.stringify(out);
+
+            } catch (e) {
+                return JSON.stringify({ error: 'Parse error: ' + e + ' raw: ' + response });
+            }
+
+          tags:
+            - tag: component
+              value: raw
+
+        - uuid: 5acfe030eb004c149bc68c8522da629a
+          name: 'AWS SES: Get metrics error'
+          type: DEPENDENT
+          key: aws.ses.get_metrics.error
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          description: 'Error returned by the metrics script, if any.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.error'
+              error_handler: DISCARD_VALUE
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 3h
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: health
+          triggers:
+            - uuid: 16ce6b732e204d2382c26bc8c3211526
+              expression: 'length(last(/AWS SES by HTTP/aws.ses.get_metrics.error)) > 0'
+              name: 'AWS SES: Failed to fetch metrics from CloudWatch'
+              event_name: 'AWS SES: CloudWatch API error: {ITEM.LASTVALUE}'
+              priority: WARNING
+              description: 'Check IAM credentials, region, and network access to CloudWatch.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: availability
+
+        - uuid: 4251375a7e0a471e81f2563fceb908e8
+          name: 'AWS SES: Emails sent'
+          type: DEPENDENT
+          key: aws.ses.send
+          delay: '0'
+          history: 30d
+          value_type: FLOAT
+          units: messages
+          description: 'Total send requests in the last 5 minutes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.m_send'
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: volume
+
+        - uuid: c52003fcd98846539168fe2e02b51e6e
+          name: 'AWS SES: Bounces'
+          type: DEPENDENT
+          key: aws.ses.bounce
+          delay: '0'
+          history: 30d
+          value_type: FLOAT
+          units: messages
+          description: 'Emails that bounced in the last 5 minutes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.m_bounce'
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: deliverability
+
+        - uuid: 39ec7e0d22b4435f9bc3579a7ce17e80
+          name: 'AWS SES: Complaints'
+          type: DEPENDENT
+          key: aws.ses.complaint
+          delay: '0'
+          history: 30d
+          value_type: FLOAT
+          units: messages
+          description: 'Spam complaints received in the last 5 minutes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.m_complaint'
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: deliverability
+
+        - uuid: 2d231f056a5640c7847b07397f93922f
+          name: 'AWS SES: Rejected sends'
+          type: DEPENDENT
+          key: aws.ses.reject
+          delay: '0'
+          history: 30d
+          value_type: FLOAT
+          units: messages
+          description: 'Emails rejected before sending in the last 5 minutes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.m_reject'
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: volume
+
+        - uuid: b71cd64f960a47aeb99efaf5942b5272
+          name: 'AWS SES: Delivery attempts'
+          type: DEPENDENT
+          key: aws.ses.delivery_attempts
+          delay: '0'
+          history: 30d
+          value_type: FLOAT
+          units: messages
+          description: 'Emails that left SES toward recipient servers in the last 5 minutes.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.m_delivery'
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: volume
+
+        - uuid: 847b8ff6013248baa167c18a68474316
+          name: 'AWS SES: Bounce rate'
+          type: DEPENDENT
+          key: aws.ses.bounce_rate
+          delay: '0'
+          history: 30d
+          value_type: FLOAT
+          description: 'Account bounce rate (decimal). AWS warning 2%, enforcement 5%.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.m_bounce_rate'
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: deliverability
+          triggers:
+            - uuid: 635cf5b0ea8649e29c35973113c361cd
+              expression: 'last(/AWS SES by HTTP/aws.ses.bounce_rate) >= {$AWS.SES.BOUNCE.RATE.HIGH}'
+              name: 'AWS SES: Bounce rate is critically high'
+              event_name: 'AWS SES: Bounce rate {ITEM.LASTVALUE} >= {$AWS.SES.BOUNCE.RATE.HIGH}'
+              priority: HIGH
+              description: 'Bounce rate at AWS enforcement threshold. Sending may be suspended.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: ebbf249de05b4186b9d54f954d7429c7
+              expression: 'last(/AWS SES by HTTP/aws.ses.bounce_rate) >= {$AWS.SES.BOUNCE.RATE.WARN} and last(/AWS SES by HTTP/aws.ses.bounce_rate) < {$AWS.SES.BOUNCE.RATE.HIGH}'
+              name: 'AWS SES: Bounce rate is elevated'
+              event_name: 'AWS SES: Bounce rate {ITEM.LASTVALUE} >= {$AWS.SES.BOUNCE.RATE.WARN}'
+              priority: WARNING
+              description: 'Bounce rate above AWS warning level. Check for invalid addresses.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'AWS SES: Bounce rate is critically high'
+                  expression: 'last(/AWS SES by HTTP/aws.ses.bounce_rate) >= {$AWS.SES.BOUNCE.RATE.HIGH}'
+              tags:
+                - tag: scope
+                  value: availability
+
+        - uuid: 14d52a0589d546a3bc78fb96b6b35013
+          name: 'AWS SES: Complaint rate'
+          type: DEPENDENT
+          key: aws.ses.complaint_rate
+          delay: '0'
+          history: 30d
+          value_type: FLOAT
+          description: 'Account complaint rate (decimal). AWS warning 0.08%, enforcement 0.1%.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.m_complaint_rate'
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: aws.ses.get_metrics
+          tags:
+            - tag: component
+              value: deliverability
+          triggers:
+            - uuid: 471838e69ae842e8871a5fa7a4334385
+              expression: 'last(/AWS SES by HTTP/aws.ses.complaint_rate) >= {$AWS.SES.COMPLAINT.RATE.HIGH}'
+              name: 'AWS SES: Complaint rate is critically high'
+              event_name: 'AWS SES: Complaint rate {ITEM.LASTVALUE} >= {$AWS.SES.COMPLAINT.RATE.HIGH}'
+              priority: HIGH
+              description: 'Complaint rate at AWS enforcement threshold. Sending may be suspended.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: 44884d10aca5401c9e6bd8842e0688c0
+              expression: 'last(/AWS SES by HTTP/aws.ses.complaint_rate) >= {$AWS.SES.COMPLAINT.RATE.WARN} and last(/AWS SES by HTTP/aws.ses.complaint_rate) < {$AWS.SES.COMPLAINT.RATE.HIGH}'
+              name: 'AWS SES: Complaint rate is elevated'
+              event_name: 'AWS SES: Complaint rate {ITEM.LASTVALUE} >= {$AWS.SES.COMPLAINT.RATE.WARN}'
+              priority: WARNING
+              description: 'Complaint rate above AWS warning level. Review send content and list hygiene.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'AWS SES: Complaint rate is critically high'
+                  expression: 'last(/AWS SES by HTTP/aws.ses.complaint_rate) >= {$AWS.SES.COMPLAINT.RATE.HIGH}'
+              tags:
+                - tag: scope
+                  value: availability
