@@ -1,1 +1,4 @@
 apwi_share.creds
+\templates\*
+*.md
+\archive\*
