@@ -1,0 +1,504 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates/Web
+  templates:
+    - uuid: 9f4c8a2d1b6e4f3c8a9d2e5b7c3f1a4d
+      template: 'Website Monitoring'
+      name: 'Website Monitoring'
+      description: |
+        Website availability, response time, content matching, and SSL cert monitoring.
+        Supports up to 4 sites. To disable a site, disable its web scenario and cert item on the host.
+        
+        Per-site macros (replace N with 1-4):
+        {$WEB.SITEN.NAME}     - Friendly name (used in scenario/item names)
+        {$WEB.SITEN.URL}      - Full URL including https://
+        {$WEB.SITEN.HOST}     - Hostname only, for cert check (e.g. example.com)
+        {$WEB.SITEN.PORT}     - TLS port for cert check (default: 443)
+        {$WEB.SITEN.MATCH}    - String/regex that must appear in response body (empty = no check)
+        
+        Global thresholds:
+        {$WEB.RESPONSE_TIME.WARN}  - Response time warn threshold, seconds (default: 3)
+        {$WEB.RESPONSE_TIME.HIGH}  - Response time high threshold, seconds (default: 8)
+        {$WEB.EXPECTED_CODE}       - Expected HTTP code (default: 200)
+        {$WEB.CERT.WARN_DAYS}      - Cert expiry warning days (default: 14)
+        {$WEB.CERT.HIGH_DAYS}      - Cert expiry critical days (default: 3)
+      groups:
+        - name: Templates/Web
+      macros:
+        - macro: '{$WEB.SITE1.NAME}'
+          value: 'Site1'
+        - macro: '{$WEB.SITE1.URL}'
+          value: 'https://example.com'
+        - macro: '{$WEB.SITE1.HOST}'
+          value: 'example.com'
+        - macro: '{$WEB.SITE1.PORT}'
+          value: '443'
+        - macro: '{$WEB.SITE1.MATCH}'
+          value: ''
+          description: 'Required string/regex in response body (empty disables match)'
+        - macro: '{$WEB.SITE2.NAME}'
+          value: 'Site2'
+        - macro: '{$WEB.SITE2.URL}'
+          value: 'https://example.org'
+        - macro: '{$WEB.SITE2.HOST}'
+          value: 'example.org'
+        - macro: '{$WEB.SITE2.PORT}'
+          value: '443'
+        - macro: '{$WEB.SITE2.MATCH}'
+          value: ''
+        - macro: '{$WEB.SITE3.NAME}'
+          value: 'Site3'
+        - macro: '{$WEB.SITE3.URL}'
+          value: 'https://example.net'
+        - macro: '{$WEB.SITE3.HOST}'
+          value: 'example.net'
+        - macro: '{$WEB.SITE3.PORT}'
+          value: '443'
+        - macro: '{$WEB.SITE3.MATCH}'
+          value: ''
+        - macro: '{$WEB.SITE4.NAME}'
+          value: 'Site4'
+        - macro: '{$WEB.SITE4.URL}'
+          value: 'https://example.io'
+        - macro: '{$WEB.SITE4.HOST}'
+          value: 'example.io'
+        - macro: '{$WEB.SITE4.PORT}'
+          value: '443'
+        - macro: '{$WEB.SITE4.MATCH}'
+          value: ''
+        - macro: '{$WEB.RESPONSE_TIME.WARN}'
+          value: '3'
+        - macro: '{$WEB.RESPONSE_TIME.HIGH}'
+          value: '8'
+        - macro: '{$WEB.EXPECTED_CODE}'
+          value: '200'
+        - macro: '{$WEB.CERT.WARN_DAYS}'
+          value: '14'
+        - macro: '{$WEB.CERT.HIGH_DAYS}'
+          value: '3'
+
+      items:
+        # ===== Site 1 cert =====
+        - uuid: c1d2e3f4a5b6789012345678901234c1
+          name: '{$WEB.SITE1.NAME}: SSL certificate'
+          type: SIMPLE
+          key: 'web.certificate.get[{$WEB.SITE1.HOST},{$WEB.SITE1.PORT}]'
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+          description: 'TLS certificate info as JSON'
+
+        - uuid: c1d2e3f4a5b6789012345678901234c2
+          name: '{$WEB.SITE1.NAME}: SSL cert - days until expiry'
+          type: DEPENDENT
+          key: 'web.cert.expiry.days[{$WEB.SITE1.NAME}]'
+          delay: '0'
+          history: 90d
+          trends: 365d
+          value_type: FLOAT
+          units: days
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE1.HOST},{$WEB.SITE1.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.not_after.timestamp'
+            - type: JAVASCRIPT
+              parameters:
+                - 'return (Number(value) - Math.floor(Date.now()/1000)) / 86400;'
+
+        - uuid: c1d2e3f4a5b6789012345678901234c3
+          name: '{$WEB.SITE1.NAME}: SSL cert - validation result'
+          type: DEPENDENT
+          key: 'web.cert.validation[{$WEB.SITE1.NAME}]'
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE1.HOST},{$WEB.SITE1.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.result.value'
+
+        # ===== Site 2 cert =====
+        - uuid: c1d2e3f4a5b6789012345678901234c4
+          name: '{$WEB.SITE2.NAME}: SSL certificate'
+          type: SIMPLE
+          key: 'web.certificate.get[{$WEB.SITE2.HOST},{$WEB.SITE2.PORT}]'
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+
+        - uuid: c1d2e3f4a5b6789012345678901234c5
+          name: '{$WEB.SITE2.NAME}: SSL cert - days until expiry'
+          type: DEPENDENT
+          key: 'web.cert.expiry.days[{$WEB.SITE2.NAME}]'
+          delay: '0'
+          history: 90d
+          trends: 365d
+          value_type: FLOAT
+          units: days
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE2.HOST},{$WEB.SITE2.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.not_after.timestamp'
+            - type: JAVASCRIPT
+              parameters:
+                - 'return (Number(value) - Math.floor(Date.now()/1000)) / 86400;'
+
+        - uuid: c1d2e3f4a5b6789012345678901234c6
+          name: '{$WEB.SITE2.NAME}: SSL cert - validation result'
+          type: DEPENDENT
+          key: 'web.cert.validation[{$WEB.SITE2.NAME}]'
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE2.HOST},{$WEB.SITE2.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.result.value'
+
+        # ===== Site 3 cert =====
+        - uuid: c1d2e3f4a5b6789012345678901234c7
+          name: '{$WEB.SITE3.NAME}: SSL certificate'
+          type: SIMPLE
+          key: 'web.certificate.get[{$WEB.SITE3.HOST},{$WEB.SITE3.PORT}]'
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+
+        - uuid: c1d2e3f4a5b6789012345678901234c8
+          name: '{$WEB.SITE3.NAME}: SSL cert - days until expiry'
+          type: DEPENDENT
+          key: 'web.cert.expiry.days[{$WEB.SITE3.NAME}]'
+          delay: '0'
+          history: 90d
+          trends: 365d
+          value_type: FLOAT
+          units: days
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE3.HOST},{$WEB.SITE3.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.not_after.timestamp'
+            - type: JAVASCRIPT
+              parameters:
+                - 'return (Number(value) - Math.floor(Date.now()/1000)) / 86400;'
+
+        - uuid: c1d2e3f4a5b6789012345678901234c9
+          name: '{$WEB.SITE3.NAME}: SSL cert - validation result'
+          type: DEPENDENT
+          key: 'web.cert.validation[{$WEB.SITE3.NAME}]'
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE3.HOST},{$WEB.SITE3.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.result.value'
+
+        # ===== Site 4 cert =====
+        - uuid: c1d2e3f4a5b6789012345678901234ca
+          name: '{$WEB.SITE4.NAME}: SSL certificate'
+          type: SIMPLE
+          key: 'web.certificate.get[{$WEB.SITE4.HOST},{$WEB.SITE4.PORT}]'
+          delay: 1h
+          history: 7d
+          trends: '0'
+          value_type: TEXT
+
+        - uuid: c1d2e3f4a5b6789012345678901234cb
+          name: '{$WEB.SITE4.NAME}: SSL cert - days until expiry'
+          type: DEPENDENT
+          key: 'web.cert.expiry.days[{$WEB.SITE4.NAME}]'
+          delay: '0'
+          history: 90d
+          trends: 365d
+          value_type: FLOAT
+          units: days
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE4.HOST},{$WEB.SITE4.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.not_after.timestamp'
+            - type: JAVASCRIPT
+              parameters:
+                - 'return (Number(value) - Math.floor(Date.now()/1000)) / 86400;'
+
+        - uuid: c1d2e3f4a5b6789012345678901234cc
+          name: '{$WEB.SITE4.NAME}: SSL cert - validation result'
+          type: DEPENDENT
+          key: 'web.cert.validation[{$WEB.SITE4.NAME}]'
+          delay: '0'
+          history: 7d
+          trends: '0'
+          value_type: CHAR
+          master_item:
+            key: 'web.certificate.get[{$WEB.SITE4.HOST},{$WEB.SITE4.PORT}]'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$.result.value'
+
+      httptests:
+        - uuid: a1b2c3d4e5f6789012345678901234a1
+          name: '{$WEB.SITE1.NAME} availability'
+          delay: 1m
+          agent: 'Zabbix/{$WEB.SITE1.NAME}'
+          retries: 2
+          steps:
+            - name: 'GET {$WEB.SITE1.NAME}'
+              url: '{$WEB.SITE1.URL}'
+              timeout: 15s
+              follow_redirects: 'YES'
+              status_codes: '{$WEB.EXPECTED_CODE}'
+              required: '{$WEB.SITE1.MATCH}'
+
+        - uuid: a1b2c3d4e5f6789012345678901234a2
+          name: '{$WEB.SITE2.NAME} availability'
+          delay: 1m
+          agent: 'Zabbix/{$WEB.SITE2.NAME}'
+          retries: 2
+          steps:
+            - name: 'GET {$WEB.SITE2.NAME}'
+              url: '{$WEB.SITE2.URL}'
+              timeout: 15s
+              follow_redirects: 'YES'
+              status_codes: '{$WEB.EXPECTED_CODE}'
+              required: '{$WEB.SITE2.MATCH}'
+
+        - uuid: a1b2c3d4e5f6789012345678901234a3
+          name: '{$WEB.SITE3.NAME} availability'
+          delay: 1m
+          agent: 'Zabbix/{$WEB.SITE3.NAME}'
+          retries: 2
+          steps:
+            - name: 'GET {$WEB.SITE3.NAME}'
+              url: '{$WEB.SITE3.URL}'
+              timeout: 15s
+              follow_redirects: 'YES'
+              status_codes: '{$WEB.EXPECTED_CODE}'
+              required: '{$WEB.SITE3.MATCH}'
+
+        - uuid: a1b2c3d4e5f6789012345678901234a4
+          name: '{$WEB.SITE4.NAME} availability'
+          delay: 1m
+          agent: 'Zabbix/{$WEB.SITE4.NAME}'
+          retries: 2
+          steps:
+            - name: 'GET {$WEB.SITE4.NAME}'
+              url: '{$WEB.SITE4.URL}'
+              timeout: 15s
+              follow_redirects: 'YES'
+              status_codes: '{$WEB.EXPECTED_CODE}'
+              required: '{$WEB.SITE4.MATCH}'
+
+      triggers:
+        # ===== Site 1 =====
+        - uuid: b1c2d3e4f5a67890123456789012b001
+          expression: 'last(/Website Monitoring/web.test.fail[{$WEB.SITE1.NAME} availability])<>0'
+          name: '{$WEB.SITE1.NAME}: Web scenario failed'
+          priority: HIGH
+          description: '{$WEB.SITE1.URL} failed. Last error: {ITEM.LASTVALUE2}'
+          manual_close: 'YES'
+
+        - uuid: b1c2d3e4f5a67890123456789012b002
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE1.NAME} availability,GET {$WEB.SITE1.NAME},resp],5m)>{$WEB.RESPONSE_TIME.WARN}'
+          name: '{$WEB.SITE1.NAME}: Response time is high (>{$WEB.RESPONSE_TIME.WARN}s for 5m)'
+          priority: WARNING
+          dependencies:
+            - name: '{$WEB.SITE1.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+              expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE1.NAME} availability,GET {$WEB.SITE1.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b003
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE1.NAME} availability,GET {$WEB.SITE1.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+          name: '{$WEB.SITE1.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+          priority: HIGH
+
+        - uuid: b1c2d3e4f5a67890123456789012b004
+          expression: 'last(/Website Monitoring/web.test.rspcode[{$WEB.SITE1.NAME} availability,GET {$WEB.SITE1.NAME}])<>{$WEB.EXPECTED_CODE} and last(/Website Monitoring/web.test.rspcode[{$WEB.SITE1.NAME} availability,GET {$WEB.SITE1.NAME}])>0'
+          name: '{$WEB.SITE1.NAME}: Unexpected HTTP response code'
+          priority: AVERAGE
+          description: 'HTTP code is {ITEM.LASTVALUE}, expected {$WEB.EXPECTED_CODE}.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b101
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE1.NAME}])<{$WEB.CERT.WARN_DAYS}'
+          name: '{$WEB.SITE1.NAME}: SSL cert expires in <{$WEB.CERT.WARN_DAYS}d'
+          priority: WARNING
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+          dependencies:
+            - name: '{$WEB.SITE1.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+              expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE1.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b102
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE1.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+          name: '{$WEB.SITE1.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+          priority: HIGH
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b103
+          expression: 'last(/Website Monitoring/web.cert.validation[{$WEB.SITE1.NAME}])<>"valid"'
+          name: '{$WEB.SITE1.NAME}: SSL cert validation failed'
+          priority: HIGH
+          description: 'Cert validation result: {ITEM.LASTVALUE}'
+
+        # ===== Site 2 =====
+        - uuid: b1c2d3e4f5a67890123456789012b005
+          expression: 'last(/Website Monitoring/web.test.fail[{$WEB.SITE2.NAME} availability])<>0'
+          name: '{$WEB.SITE2.NAME}: Web scenario failed'
+          priority: HIGH
+          description: '{$WEB.SITE2.URL} failed. Last error: {ITEM.LASTVALUE2}'
+          manual_close: 'YES'
+
+        - uuid: b1c2d3e4f5a67890123456789012b006
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE2.NAME} availability,GET {$WEB.SITE2.NAME},resp],5m)>{$WEB.RESPONSE_TIME.WARN}'
+          name: '{$WEB.SITE2.NAME}: Response time is high (>{$WEB.RESPONSE_TIME.WARN}s for 5m)'
+          priority: WARNING
+          dependencies:
+            - name: '{$WEB.SITE2.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+              expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE2.NAME} availability,GET {$WEB.SITE2.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b007
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE2.NAME} availability,GET {$WEB.SITE2.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+          name: '{$WEB.SITE2.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+          priority: HIGH
+
+        - uuid: b1c2d3e4f5a67890123456789012b008
+          expression: 'last(/Website Monitoring/web.test.rspcode[{$WEB.SITE2.NAME} availability,GET {$WEB.SITE2.NAME}])<>{$WEB.EXPECTED_CODE} and last(/Website Monitoring/web.test.rspcode[{$WEB.SITE2.NAME} availability,GET {$WEB.SITE2.NAME}])>0'
+          name: '{$WEB.SITE2.NAME}: Unexpected HTTP response code'
+          priority: AVERAGE
+          description: 'HTTP code is {ITEM.LASTVALUE}, expected {$WEB.EXPECTED_CODE}.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b201
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE2.NAME}])<{$WEB.CERT.WARN_DAYS}'
+          name: '{$WEB.SITE2.NAME}: SSL cert expires in <{$WEB.CERT.WARN_DAYS}d'
+          priority: WARNING
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+          dependencies:
+            - name: '{$WEB.SITE2.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+              expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE2.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b202
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE2.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+          name: '{$WEB.SITE2.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+          priority: HIGH
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b203
+          expression: 'last(/Website Monitoring/web.cert.validation[{$WEB.SITE2.NAME}])<>"valid"'
+          name: '{$WEB.SITE2.NAME}: SSL cert validation failed'
+          priority: HIGH
+          description: 'Cert validation result: {ITEM.LASTVALUE}'
+
+        # ===== Site 3 =====
+        - uuid: b1c2d3e4f5a67890123456789012b009
+          expression: 'last(/Website Monitoring/web.test.fail[{$WEB.SITE3.NAME} availability])<>0'
+          name: '{$WEB.SITE3.NAME}: Web scenario failed'
+          priority: HIGH
+          description: '{$WEB.SITE3.URL} failed. Last error: {ITEM.LASTVALUE2}'
+          manual_close: 'YES'
+
+        - uuid: b1c2d3e4f5a67890123456789012b010
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE3.NAME} availability,GET {$WEB.SITE3.NAME},resp],5m)>{$WEB.RESPONSE_TIME.WARN}'
+          name: '{$WEB.SITE3.NAME}: Response time is high (>{$WEB.RESPONSE_TIME.WARN}s for 5m)'
+          priority: WARNING
+          dependencies:
+            - name: '{$WEB.SITE3.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+              expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE3.NAME} availability,GET {$WEB.SITE3.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b011
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE3.NAME} availability,GET {$WEB.SITE3.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+          name: '{$WEB.SITE3.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+          priority: HIGH
+
+        - uuid: b1c2d3e4f5a67890123456789012b012
+          expression: 'last(/Website Monitoring/web.test.rspcode[{$WEB.SITE3.NAME} availability,GET {$WEB.SITE3.NAME}])<>{$WEB.EXPECTED_CODE} and last(/Website Monitoring/web.test.rspcode[{$WEB.SITE3.NAME} availability,GET {$WEB.SITE3.NAME}])>0'
+          name: '{$WEB.SITE3.NAME}: Unexpected HTTP response code'
+          priority: AVERAGE
+          description: 'HTTP code is {ITEM.LASTVALUE}, expected {$WEB.EXPECTED_CODE}.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b301
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE3.NAME}])<{$WEB.CERT.WARN_DAYS}'
+          name: '{$WEB.SITE3.NAME}: SSL cert expires in <{$WEB.CERT.WARN_DAYS}d'
+          priority: WARNING
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+          dependencies:
+            - name: '{$WEB.SITE3.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+              expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE3.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b302
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE3.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+          name: '{$WEB.SITE3.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+          priority: HIGH
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b303
+          expression: 'last(/Website Monitoring/web.cert.validation[{$WEB.SITE3.NAME}])<>"valid"'
+          name: '{$WEB.SITE3.NAME}: SSL cert validation failed'
+          priority: HIGH
+          description: 'Cert validation result: {ITEM.LASTVALUE}'
+
+        # ===== Site 4 =====
+        - uuid: b1c2d3e4f5a67890123456789012b013
+          expression: 'last(/Website Monitoring/web.test.fail[{$WEB.SITE4.NAME} availability])<>0'
+          name: '{$WEB.SITE4.NAME}: Web scenario failed'
+          priority: HIGH
+          description: '{$WEB.SITE4.URL} failed. Last error: {ITEM.LASTVALUE2}'
+          manual_close: 'YES'
+
+        - uuid: b1c2d3e4f5a67890123456789012b014
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE4.NAME} availability,GET {$WEB.SITE4.NAME},resp],5m)>{$WEB.RESPONSE_TIME.WARN}'
+          name: '{$WEB.SITE4.NAME}: Response time is high (>{$WEB.RESPONSE_TIME.WARN}s for 5m)'
+          priority: WARNING
+          dependencies:
+            - name: '{$WEB.SITE4.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+              expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE4.NAME} availability,GET {$WEB.SITE4.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b015
+          expression: 'avg(/Website Monitoring/web.test.time[{$WEB.SITE4.NAME} availability,GET {$WEB.SITE4.NAME},resp],5m)>{$WEB.RESPONSE_TIME.HIGH}'
+          name: '{$WEB.SITE4.NAME}: Response time is very high (>{$WEB.RESPONSE_TIME.HIGH}s for 5m)'
+          priority: HIGH
+
+        - uuid: b1c2d3e4f5a67890123456789012b016
+          expression: 'last(/Website Monitoring/web.test.rspcode[{$WEB.SITE4.NAME} availability,GET {$WEB.SITE4.NAME}])<>{$WEB.EXPECTED_CODE} and last(/Website Monitoring/web.test.rspcode[{$WEB.SITE4.NAME} availability,GET {$WEB.SITE4.NAME}])>0'
+          name: '{$WEB.SITE4.NAME}: Unexpected HTTP response code'
+          priority: AVERAGE
+          description: 'HTTP code is {ITEM.LASTVALUE}, expected {$WEB.EXPECTED_CODE}.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b401
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE4.NAME}])<{$WEB.CERT.WARN_DAYS}'
+          name: '{$WEB.SITE4.NAME}: SSL cert expires in <{$WEB.CERT.WARN_DAYS}d'
+          priority: WARNING
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+          dependencies:
+            - name: '{$WEB.SITE4.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+              expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE4.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+
+        - uuid: b1c2d3e4f5a67890123456789012b402
+          expression: 'last(/Website Monitoring/web.cert.expiry.days[{$WEB.SITE4.NAME}])<{$WEB.CERT.HIGH_DAYS}'
+          name: '{$WEB.SITE4.NAME}: SSL cert expires in <{$WEB.CERT.HIGH_DAYS}d'
+          priority: HIGH
+          description: 'Cert expires in {ITEM.LASTVALUE} days.'
+
+        - uuid: b1c2d3e4f5a67890123456789012b403
+          expression: 'last(/Website Monitoring/web.cert.validation[{$WEB.SITE4.NAME}])<>"valid"'
+          name: '{$WEB.SITE4.NAME}: SSL cert validation failed'
+          priority: HIGH
+          description: 'Cert validation result: {ITEM.LASTVALUE}'

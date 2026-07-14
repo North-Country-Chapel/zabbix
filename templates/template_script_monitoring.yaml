@@ -1,0 +1,67 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 02fd390587474c1385f9f5e54397873f
+      name: Template/Apps
+  templates:
+    - uuid: 5920057736e042f2ae2a0621a3b8d710
+      template: 'NCC Script Monitoring'
+      name: 'Script Monitoring'
+      groups:
+        - name: Template/Apps
+      discovery_rules:
+        - uuid: 0bad458ae95d495ba5640adbf1ff7397
+          name: 'Script Discovery'
+          type: HTTP_AGENT
+          key: script.discovery
+          delay: 1h
+          item_prototypes:
+            - uuid: 823b11c4c9864cbba8e571fc4864970f
+              name: '{#SCRIPT_NAME} - crash'
+              type: TRAP
+              key: 'script.crash[{#SCRIPT_NAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: TEXT
+              trigger_prototypes:
+                - uuid: 6ca3afd3768f432cb1af213c5c79d086
+                  expression: 'last(/NCC Script Monitoring/script.crash[{#SCRIPT_NAME}])<>""'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'nodata(/NCC Script Monitoring/script.crash[{#SCRIPT_NAME}],300)=1'
+                  name: '{#SCRIPT_NAME} crashed: {ITEM.LASTVALUE}'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: HIGH
+                  manual_close: 'YES'
+            - uuid: 6fa1579674c24a278c3b32ef765b19b1
+              name: '{#SCRIPT_NAME} - error'
+              type: TRAP
+              key: 'script.error[{#SCRIPT_NAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: TEXT
+              trigger_prototypes:
+                - uuid: 4889d5baa85b4476954381c4c4b11833
+                  expression: 'last(/NCC Script Monitoring/script.error[{#SCRIPT_NAME}])<>""'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'nodata(/NCC Script Monitoring/script.error[{#SCRIPT_NAME}],300)=1'
+                  name: '{#SCRIPT_NAME} mid-run error: {ITEM.LASTVALUE}'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: AVERAGE
+                  manual_close: 'YES'
+            - uuid: 0807dc36b74445eca157f660ea6604d9
+              name: '{#SCRIPT_NAME} - key event'
+              type: TRAP
+              key: 'script.key_event[{#SCRIPT_NAME}]'
+              delay: '0'
+              trends: '0'
+              value_type: TEXT
+              trigger_prototypes:
+                - uuid: 760a98d1ecc34e18b61d04cdb70fe01c
+                  expression: 'last(/NCC Script Monitoring/script.key_event[{#SCRIPT_NAME}])<>""'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'nodata(/NCC Script Monitoring/script.key_event[{#SCRIPT_NAME}],300)=1'
+                  name: '{#SCRIPT_NAME} key event: {ITEM.LASTVALUE}'
+                  opdata: '{ITEM.LASTVALUE}'
+                  priority: INFO
+                  manual_close: 'YES'
+          url: 'http://10.10.0.77:9999/discover/{HOST.NAME}'
