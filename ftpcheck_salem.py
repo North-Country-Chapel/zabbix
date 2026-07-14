@@ -20,9 +20,10 @@ ftpUsername = creds.get('FTP_SALEM_USERNAME')
 ftpPassword = creds.get('FTP_SALEM_PASSWORD')
 ftpDirectory = creds.get('FTP_SALEM_DIRECTORY')
 
-# Open FTP server
-ftp = ftplib.FTP(ftpServer)
+# Open FTP server over TLS
+ftp = ftplib.FTP_TLS(ftpServer)
 ftp.login(ftpUsername, ftpPassword)
+ftp.prot_p()  # encrypt the data channel too, not just the login
 cwd = ftp.cwd(ftpDirectory)
 
 
